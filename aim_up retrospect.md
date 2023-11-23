@@ -21,4 +21,64 @@ package manager : npm
 	- `drawCross` : 현재 마우스 위치에 크로스헤어 추가
 	- `Game` : 
 		- `useEffect`로 `setInterval`감싸서 시간 재는데 잘 안나옴
-		- 
+
+
+***package.json에서 `"hompage":"./"` 추가해서 상대경로 추가함***
+```yaml
+# Simple workflow for deploying static content to GitHub Pages
+name: Deploy aim.io
+
+on:
+  # Runs on pushes targeting the default branch
+  push:
+    branches: ["master"]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  # Single deploy job since we're just deploying
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+      - name: Install dependencies and build
+        run: |
+          npm install
+          npm run build
+      - name: Setup Pages
+        uses: actions/configure-pages@v3
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v2
+        with:
+          # only build folder
+          path: './build'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
+
+```
+env.CI 해결 https://velog.io/@zemma0618/GitHub-Actions-Treating-warnings-as-errors-because-process.env.CI-true-%EC%97%90%EB%9F%AC
+
+
+![](https://i.imgur.com/xK4OMVY.png)

@@ -1,0 +1,103 @@
+![](https://i.imgur.com/rNtiZBP.png)
+
+이번 과제에서 살펴볼 프로토콜로써, DNS 또는 DHCP 프로토콜 중DHCP 프로토콜을 선택하였습니다.
+호스트의 IP주소 할당 방식은 두 가지가 존재합니다.
+- 호스트가 수동으로 IP주소를 구성하는 방법
+- 서버에서 호스트의 IP주소를 자동으로 제공하는 방법 (DHCP)
+DHCP는 호스트가 직접적인 구성을 하지 않고도 IP주소, 그리고 로컬 DNS 서버 주소 등의 추가 정보를 얻을 수 있도록 해주며, 이러한 특성을 두고 **plug-and-play**라고도 부릅니다.
+이러한 DHCP의 특성은 sejong Wi-Fi와 같이 호스트(예를 들어, 학생들)가 빈번하게 접속을 시작하거나 종료하는 환경에서 특히 유용하며, 실제로 sejong Wi-Fi 또한 이 DHCP를 통해 자동으로 호스트의 IP를 할당합니다.
+![](https://i.imgur.com/clSZC8I.png)
+
+따라서, sejong Wi-Fi에 연결하고, Wire Shark의 필터링 검색을 이용하여 DHCP 프로토콜에 해당하는 항목만을 표시하고 살펴보았습니다.
+
+밑에 사진은 release하고 renew한 버전
+`ipconfig /release` , `ipconfig /renew` 
+![](https://i.imgur.com/o65zs5U.png)
+
+## DHCP overview
+먼저 캡쳐한 패킷을 자세히 들여다보기 전에, *새로운 호스트*에 대해 네트워크 상에서 DHCP 프로토콜이 진행되는 4단계의 과정을 먼저 간단히 살펴보고자 합니다. 빨간 네모 영역의 4개의 DHCP 메시지)
+![](https://i.imgur.com/qD3bjhT.png)
+DHCP는 서버-클라이언트 구조를 가집니다.
+*새로운 호스트*(클라이언트)가 도착하면, 클라이언트와 서버가 주고받는 4단계의 DHCP메시지는 다음과 같습니다 :
+- `DHCP Discover` : 새롭게 도착한 호스트가 상호작용할 DHCP를 발견하기 위해 보내는 UDP 패킷
+- `DHCP Offer` : `DHCP Discover`메시지를 받은 DHCP서버가 보내는 메시지로, 클라이언트에게 제공할 IP주소, IP주소 임대 기간 등을 포함
+- `DHCP Request` : 서버로부터 `DHCP Offer` 메시지로 제공 받은 IP주소 정보를 이용하고자 클라이언트에서 보내는 요청 메시지
+- `DHCP ACK` : 클라이언트가 보낸 `DHCP Request` 메시지에 대해, 요청을 확인하였다는 메시지 (또는, 서버가  `DHCP Request`를 거절하는 경우 `DHCP NAK`메시지를 전송)
+이 4단계를 거치는 동안 클라이언트 호스트의 IP주소는 확정되지 않았으며, 따라서 각 4개 메시지는 `Destination`필드를 `255.255.255.255`를 사용하여 broadcast하고 있음을 확인할 수 있습니다.
+같은 이유로, 클라이언트 호스트에서 보내는 `Discover, Request` 메시지는 `Source`필드가 확정되지 않았고 `0.0.0.0`으로 표현됩니다.
+또한 이 4개 메시지들은 동일한 transaction ID (`0x36e9e755`)를 갖는, 같은 하나의 과정으로 묶이는 것을 알 수 있습니다.
+이제 각각의 메시지들에 대해, 패킷을 실제로 열어보고 필드들을 살펴봄으로써 더욱 자세히 알아보도록 하겠습니다.
+
+## DHCP Discover
+가장 먼저, *새로운 호스트*(클라이언트)는 DHCP 서버를 찾기 위해 `DHCP Discover` 메시지를 broadcast로 뿌립니다. 
+`DHCP Discover` 메시지인 4858번 Frame의 캡쳐결과입니다. 
+![](https://i.imgur.com/CsFUww2.png)
+- 맨 위에서 4번째 줄을 보면, Transport Layer 프로토콜로 **UDP**(User Datagram Protocol)를 사용하여 broadcast중임을 알 수 있습니다.
+	이는 DHCP 4단계 과정을 거치는 동안 공통적으로 관찰됩니다.
+- `IPv4 Src` : 아직 IP주소를 할당받지 않았으므로,  `0.0.0.0`으로 설정되어 있습니다.
+- `IPv4 Dst` : broadcast로 뿌리기 위해 `255.255.255.255`로 설정됩니다.
+- `Your (client) IP address` : IP주소를 할당받아 가져올 `yiaddr`필드입니다.
+
+## DHCP : Offer
+클라이언트가 뿌린 UDP 데이터그램인 `DHCP Discover` 메시지를 받은 DHCP 서버는 이에 대한 응답으로 `DHCP Offer` 메시지를 전달합니다.
+`DHCP Offer` 메시지인 4879번 Frame의 캡쳐결과입니다.
+![](https://i.imgur.com/dNElSBx.png)
+- `IPv4 Src` : 서버의 IP주소 자리입니다. `1.1.1.1`로 세팅되어있는데, 이는 일종의 공용 DNS Identifier로 보여집니다. (from Cloudflare.com : what-is-1.1.1.1)
+- `IPv4 Dst` : 아직 클라이언트의 IP주소가 확정되지 않았으므로, `255.255.255.255`로 broadcast됩니다.
+- `Your (client) IP address` : 클라이언트에게 제공하는 IP주소인 `yiaddr`필드입니다. 할당 가능한 IP주소를 여기에 제공합니다.
+- 또한 하단에는 여러 `Option`필드가 존재하며, `first-hop router address`, `DNS`, `Subnet Mask`, `IP Address Lease Time`(IP주소가 유효한 시간) 등의 추가 정보를 제공합니다.
+
+## DHCP : Request
+클라이언트는 DHCP서버에서 제공한 `DHCP Offer`메시지를 받고, 이에 대한 응답으로, 제공받은 IP주소를 사용하겠다는 요청을 보냅니다.
+![](https://i.imgur.com/Z9oPauq.png)
+- `IPv4 Src` : `DHCP Offer`메시지의 `yiaddr`에 해당하는 IP주소의 사용을 아직 확인받지 않았으므로, 여전히 `0.0.0.0`으로 비어있습니다.
+- `IPv4 Dst` : 목적지 또한 여전히 broadcast인 `255.255.255.255`입니다.
+- `Option: (50) Requested IP Address` : 직전에 `DHCP Offer`메시지를 통해 제공받은 IP주소이며, 여기에 적힌 IP주소의 사용을 요청합니다.
+
+## DHCP : ACK
+클라이언트로부터 `DHCP Request` 메시지를 전달받은 DHCP 서버는 이에 대한 확인 응답으로 `DHCP ACK`메시지를 전달합니다.
+![](https://i.imgur.com/ZlAJHBD.png)
+- `IPv4 Src` : 위 `DHCP Offer`메시지의 상황과 동일합니다.
+- `IPv4 Dst` : 이때까지도 클라이언트 호스트의 IP 주소가 확정되지 않았으므로, `255.255.255.255`로 broadcast합니다.
+- `Your (client) IP address` : `DHCP Offer`에서 제공한 IP 주소와 동일한, 클라이언트가 사용 가능한 IP주소 필드입니다. (`yiaddr`)
+
+## DHCP : optional Discover/Offer
+위에서는 *새로운 호스트*에 대한 DHCP의 4단계 진행과정을 살펴보았습니다. 그런데 이전에 연결했던 호스트가 다시 네트워크에 접속할 경우, DHCP 서버는 두 가지 선택을 할 수 있습니다 :
+- 매번 다른 IP주소를 할당
+- 이전과 동일한 IP주소를 할당 : `DHCP Discover, DHCP Offer` 생략됨
+
+다음은, 이전에 연결했던 호스트에게 *이전과 동일한 IP주소를 할당*하는 경우의 transaction 양상입니다.
+![](https://i.imgur.com/Ngs0Aee.png)
+- 클라이언트는 이전에 사용했던 IP주소를 기억했다가, 연결 시 이를 `Requested IP Address`필드의 값으로 하여 `DHCP Request`를 전달합니다.
+- DHCP서버는 `DHCP Request`메시지를 전달받고, 해당 IP 주소가 여전히 사용 가능하다면 `DHCP ACK`를 클라이언트에게 전달합니다.
+
+제가 사용하는 노트북은 이전에 이미 sejong Wi-Fi에 연결한 경험이 있으므로, 가장 처음에 이루어진 DHCP Transaction은 `DHCP Discover, DHCP Offer` 메시지가 생략되고 `DHCP Request, DHCP ACK`만을 주고받는 형태로 이루어졌음을 확인할 수 있었습니다.
+
+따라서 Window CLI환경에서 `ipconfig /release`, `ipconfig /renew` 명령을 실행하여 `DHCP Discover, DHCP Offer` 메시지를 주고받는 모습을 확인할 수 있었습니다.
+아래 붉은색 사각형 영역에 해당하는 메시지들이 그 과정을 보여줍니다.
+![](https://i.imgur.com/uIPcJcp.png)
+
+### DHCP : IP 주소 임대 갱신
+위에서 살펴보았듯, `DHCP Offer` (또는 `DHCP ACK`)메시지에는 다음과 같은 필드가 존재했습니다 :
+![](https://i.imgur.com/UNXC3F0.png)
+이는 DHCP를 통해 할당받은 IP주소가 유효한 시간을 나타냅니다. 
+
+위에서 살펴본 패킷들보다 나중에 들어오는 패킷을 더 살펴보면 조금은 어색할 수 있는 패킷들이 눈에 띕니다.
+![](https://i.imgur.com/tjx6SOu.png)
+이전까지의 DHCP 메시지들은 클라이언트 호스트의 IP주소가 확정되지 않았기 때문에 `0.0.0.0`의 `Source` 또는, `255.255.255.255`의 `Destination`을 사용했던 반면, 붉은색 사각형 영역의 패킷들은 `Source`또는 `Destination`에 클라이언트의 IP주소가 명시되어 있습니다.
+이는 IP 주소 임대 유효시간을 갱신하기위한 `DHCP Request`와 이에 대한 `DHCP ACK` Transaction과정입니다. 
+
+위에서 살펴보았듯, `DHCP Offer` (또는 `DHCP ACK`)메시지에는 다음과 같은 필드가 존재했습니다 :
+![](https://i.imgur.com/UNXC3F0.png)
+이는 DHCP를 통해 할당받은 IP주소가 유효한 시간을 나타냅니다.
+또한 
+
+이 IP 주소 임대 갱신 Transaction의 경우, 이미 클라이언트 호스트가 해당 IP 주소를 사용중이므로, 이전까지와 다르게 broadcast가 아닌 IP 주소를 명시하여 User Datagram을 주고받게 되며, 유효시간의 반절인 약 900초마다 갱신을 위한 Transaction을 수행하는 모습을 관찰할 수 있습니다.
+
+
+
+
+
+
+
+DHCP server identifier 1.1.1.1임에 대한 논의 [여기](https://revolutionwifi.blogspot.com/2011/03/explaining-dhcp-server-1111.html)
