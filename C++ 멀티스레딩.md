@@ -47,8 +47,15 @@ C++로 게임을 만들고 있는데요
 - `case`문을 중괄호 `{}`로 묶거나
 둘 중 하나 선택해서 해결할 수 있습니다
 대신 후자의 방식은 당연히 scope가 중괄호 내부로 제한되니 그 안에서만 사용할 수 있습니다
-![](https://i.imgur.com/MuWI0wV.png)
+<img src="https://i.imgur.com/MuWI0wV.png" width=100%>
 
-스레드 동기화
-![](https://i.imgur.com/cSbhn7L.png)
-이렇게 여러 개의 스레드가 돌아갈 떄 
+
+아 그리고 이제 연산이 일부 병렬적이므로 자원에 동시에 접근하고 수정하게 될 수도 있습니다..\
+따라서 동기화하려면\
+여러 방법이 있는 것 같은데 저는 `std::mutex`를 쓰는 방법을 택했습니다
+
+`#include <mutex>`로 먼저 뮤텍스를 가져오신 다음에
+전역에 `std::mutex m`과 같이 뮤텍스를 하나 생성해줍니다
+이제 동기화하려는 코드 앞뒤로 `m.lock()`, `m.unlock()`을 써서 감싸줍니다
+대충 이런 식
+<img src="https://i.imgur.com/cSbhn7L.png" width=100%>
